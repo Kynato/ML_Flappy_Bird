@@ -23,7 +23,7 @@ def LoadImage(file_name: str, doubled:bool = True):
 
 BIRD_IMGS = [ LoadImage('bird1.png'), LoadImage('bird2.png'), LoadImage('bird3.png')]
 PIPE_IMG = LoadImage('pipe.png')
-BASE_IMG = LoadImage('base.png')
+FLOOR_IMG = LoadImage('base.png')
 BG_IMG = LoadImage('bg.png')
 
 class Bird:
@@ -118,24 +118,129 @@ class Bird:
         # Rotate the agent image arount it's center
         rotated_image = pygame.transform.rotate(self.img, self.tilt)
         new_rect = rotated_image.get_rect(center=self.img.get_rect(topleft = (self.pos_horizontal, self.pos_vertical)).center)
-        # Blit the rotated image onto the screen
+
+        # Blit the rotated agent(Bird) onto the screen
         win.blit(rotated_image, new_rect.topleft)
 
     def GetMask(self):
         return pygame.mask.from_surface(self.img)
 
-def DrawWindow(win, bird):
+class Pipe:
+    ### CONSTANTS
+    # Distance between the generated pipes
+    GAP = 200
+    # Velocity of pipes
+    VEL = 5
+
+    # This class actually holds both TOP and BOTTOM pipe
+
+    def __init__(self, pos_horizontal):
+        # Horizontal placement of pipe. Initiation usually to right end of the window
+        self.pos_horizontal = pos_horizontal
+        # Think about is as a gap pposition
+        self.height = 0
+
+        # Vertical placement anchors for top and bottom pipe
+        self.top = 0
+        self.bottom = 0
+
+        # Pipe images
+        self.PIPE_BOTTOM = PIPE_IMG
+        self.PIPE_TOP = pygame.transform.flip(PIPE_IMG, False, True) # Worth moving to globals?
+
+        # Whether the agent passed thru
+        self.passed = False
+
+        self.SetHeight()
+
+    # Set positions of top and bottom pipe
+    def SetHeight(self):
+        # Pick the pipe gap position randomly
+        self.height = random.randrange(50, 450)
+        # Set the pipe vertical anchors
+        self.top = self.height - self.PIPE_TOP.get_height()
+        self.bottom = self.height + self.GAP
+
+    # Change the pipes horizontal position in relation to VEL
+    def Move(self):
+        self.pos_horizontal -= self.VEL
+
+    # Blit both top and bottom pipe onto the window passed in the argument
+    def Draw(self, win):
+        win.blit(self.PIPE_TOP, (self.pos_horizontal, self.top))
+        win.blit(self.PIPE_BOTTOM, (self.pos_horizontal, self.bottom))
+
+    # Pixel Perfect collisions using masks
+    def Collide(self, bird:Bird):
+        bird_mask = bird.GetMask()
+        top_mask = pygame.mask.from_surface(self.PIPE_TOP)
+        bottom_mask = pygame.mask.from_surface(self.PIPE_BOTTOM)
+
+        top_offset = (self.pos_horizontal - bird.x, self.top - round(bird.y))
+        bottom_offset = (self.pos_horizontal - bird.x, self.bottom - round(bird.y))
+
+
+        b_point = bird_mask.overlap(bottom_mask, bottom_offset)
+        t_point = bird_mask.overlap(top_mask, top_offset)
+
+        # if b_point == None, then there is no collision
+        if t_point or b_point:
+            return True
+
+        return False
+
+
+class Floor:
+    ### CONSTANTS
+    # Velocity of the ground moving. Should be equal to the velocity of pipes
+    VEL = Pipe.VEL # Will it work? Do i need to make it static somehow like in c#
+    # Width of the base image
+    WIDTH = FLOOR_IMG.get_width()
+    # Sprite of the base
+    IMG = FLOOR_IMG
+
+    def __init__(self, pos_vertical):
+        self.pos_vertical = pos_vertical
+        self.anchor_zero = 0
+        self.anchor_one = self.WIDTH
+
+    def Move(self):
+        # Translate the anchors by velocity
+        self.anchor_zero -= self.VEL
+        self.anchor_one -= self.VEL
+
+        # Interlace the floors
+        if self.anchor_zero + self.WIDTH < 0:
+            self.anchor_zero = self.anchor_one + self.WIDTH
+
+        if self.anchor_one + self.WIDTH < 0:
+            self.anchor_one = self.anchor_zero + self.WIDTH
+
+    def Draw(self, win):
+        win.blit(self.IMG, (self.anchor_zero, self.pos_vertical))
+        win.blit(self.IMG, (self.anchor_one, self.pos_vertical))
+        
+
+
+
+def DrawWindow(win, bird, floor):
     win.blit(BG_IMG, (0,0))
     bird.Draw(win)
+    floor.Draw(win)
+
     pygame.display.update()
+    
 
 def Main():
     a1 = Bird(200, 200)
+    floor = Floor(700)
+
+
     win = pygame.display.set_mode( (WINDOW_WIDTH, WINDOW_HEIGHT) )
     clock = pygame.time.Clock()
 
     run = True
-    
+
     while run:
         clock.tick(30)
         for event in pygame.event.get():
@@ -145,7 +250,7 @@ def Main():
             #    if event.key == pygame.K_w:
             #        a1.Jump()
         a1.Move()
-        DrawWindow(win, a1)
+        DrawWindow(win, a1, floor)
 
     pygame.quit()
     quit()
